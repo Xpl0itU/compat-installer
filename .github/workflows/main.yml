@@ -8,7 +8,6 @@ on:
 jobs:
   build-binary:
     runs-on: ubuntu-18.04
-    needs: clang-format
     steps:
     - uses: actions/checkout@v2
     - name: build binary
