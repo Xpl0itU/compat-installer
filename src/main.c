@@ -43,7 +43,7 @@ extern const u32 title_00000000_bin_size;
 extern const u8 title_00000001_bin[];
 extern const u32 title_00000001_bin_size;
 
-s32 fsaFd, ret;
+int fsaFd, ret;
 
 static int asyncStub(int result, void* usrdata)
 { 
@@ -78,12 +78,6 @@ void initIOSUHax() {
     if (res < 0) {
         OSFatal("IOSUHAX_open failed, please start this installer with\n Tiramisu/Aroma and verify you have the\n 01_sigpatches.rpx in your SD card.");
     }
-}
-
-void deInitIOSUHax(s32 fsaFd) {
-    unmount_fs("fs");
-    IOSUHAX_FSA_Close(fsaFd);
-    IOSUHAX_Close();
 }
 
 void clearScreen() {
@@ -143,9 +137,10 @@ int main() {
         }
         if((status.trigger & VPAD_BUTTON_A) && !installed) {
             initIOSUHax();
-            ret = IOSUHAX_Open(NULL);
             fsaFd = IOSUHAX_FSA_Open();
-            ret = mount_fs("fs", fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01");
+            //ret = IOSUHAX_FSA_Mount(fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01", 2, (char*)0, 0);
+            //ret = mount_fs("fs", fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01");
+            ret = mount_fs("slc", fsaFd, NULL, "/vol/storage_slccmpt01");
             resetScreen(tvBuffer, drcBuffer, tvBufferSize, drcBufferSize);
             clearScreen();
             writeToScreen(1, "Installing the Homebrew Channel...");
@@ -157,7 +152,7 @@ int main() {
             contents[1].length = title_00000001_bin_size;
             ret = CINS_Install((const void*) title_cetk_bin, title_cetk_bin_size,
                             (const void*) title_tmd_bin, title_tmd_bin_size,
-                            contents, 2);
+                            contents, 2, fsaFd);
             installed = true;
             resetScreen(tvBuffer, drcBuffer, tvBufferSize, drcBufferSize);
             clearScreen();
@@ -171,7 +166,7 @@ int main() {
     if(drcBuffer) free(drcBuffer);
     if(tvBuffer) free(tvBuffer);
     
-    unmount_fs("fs");
+    unmount_fs("slc");
     OSScreenShutdown();
     WHBProcShutdown();
 }
