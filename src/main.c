@@ -144,7 +144,7 @@ int main() {
         if((status.trigger & VPAD_BUTTON_A) && !installed) {
             initIOSUHax();
             ret = IOSUHAX_Open(NULL);
-            fsaFd = IOSUHAX_FSS_Open();
+            fsaFd = IOSUHAX_FSA_Open();
             ret = mount_fs("fs", fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01");
             resetScreen(tvBuffer, drcBuffer, tvBufferSize, drcBufferSize);
             clearScreen();
