@@ -18,7 +18,6 @@
 
 #include "installer.h"
 #include <gctypes.h>
-#include <iosuhax.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -27,11 +26,15 @@
 
 #define CINS_DEBUG
 
+void WUPI_putstr(const char*);
+
 #ifdef CINS_DEBUG
 #   define CINS_Log(...) do {                           \
         char _wupi_print_str[256];                      \
         snprintf(_wupi_print_str, 255, __VA_ARGS__);    \
     } while (0)
+#else
+#   define CINS_Log(...)
 #endif
 
 #define CINS_STAGE_INIT           1
@@ -48,7 +51,7 @@
 #define FS_STATUS_EXISTS    -0x30016
 #define FS_STATUS_NOT_FOUND -0x30017
 
-#define CINS_PATH_LEN       (sizeof("slc:") + 63)
+#define CINS_PATH_LEN       (sizeof("slcmpt:") + 63)
 
 #define CINS_ID_HI ((u32)(CINS_TITLEID >> 32))
 #define CINS_ID_LO ((u32)(CINS_TITLEID & 0xFFFFFFFF))
@@ -65,11 +68,11 @@ s32
 CINS_Install (
     const void* ticket, u32 ticket_size,
     const void* tmd, u32 tmd_size, 
-    CINS_Content* contents, u16 numContents, int fsaFd
+    CINS_Content* contents, u16 numContents
 )
 {
     s32 ret, stage, i;
-    int fd = -1;
+    FILE* fd = NULL;
     char path[CINS_PATH_LEN], pathd[CINS_PATH_LEN];
     char titlePath[CINS_PATH_LEN], ticketPath[CINS_PATH_LEN], ticketFolder[CINS_PATH_LEN];
     
@@ -80,13 +83,13 @@ CINS_Install (
      * other directories. The wupserver doesn't already support renaming files,
      * and my attempt to add it failed so I gave up. */
     snprintf(titlePath, CINS_PATH_LEN,
-             "slc:/title/%08x/%08x", CINS_ID_HI, CINS_ID_LO);
+             "slcmpt:/title/%08x/%08x", CINS_ID_HI, CINS_ID_LO);
     snprintf(path, CINS_PATH_LEN,
-             "slc:/title/%08x", CINS_ID_HI);
+             "slcmpt:/title/%08x", CINS_ID_HI);
     snprintf(ticketPath, CINS_PATH_LEN,
-             "slc:/ticket/%08x/%08x.tik", CINS_ID_HI, CINS_ID_LO);
+             "slcmpt:/ticket/%08x/%08x.tik", CINS_ID_HI, CINS_ID_LO);
     snprintf(ticketFolder, CINS_PATH_LEN,
-             "slc:/ticket/%08x", CINS_ID_HI);
+             "slcmpt:/ticket/%08x", CINS_ID_HI);
     /* Init stage is not needed anymore. */
 
     CINS_Log("Writing ticket...\n");
@@ -115,18 +118,20 @@ CINS_Install (
         /* Create the title directory if it doesn't already exist. The first
          * word (type) should exist, but the second one (the unique title)
          * shouldn't unless there is save data. */
-        //ret = mkdir(path, -1);
-        ret = IOSUHAX_FSA_MakeDir(fsaFd, "slc:/title/00010001/4f484243", -1);
+        ret = mkdir(path, -1);
         if (ret == 0 || errno == FS_STATUS_EXISTS)
         {
-            ret = IOSUHAX_FSA_MakeDir(fsaFd, titlePath, -1);
+            ret = mkdir(titlePath, -1);
             if (ret != 0 && errno == FS_STATUS_EXISTS) {
                 /* The title is already installed, delete content but preserve
                  * the data directory. */
                 CINS_Log(
                     "Title directory already exists, deleting content...\n"
                 );
-                if (IOSUHAX_FSA_Remove(fsaFd, "slc:/title/00010001/4f484243/content") == 0 || errno == FS_STATUS_NOT_FOUND)
+                snprintf(path, CINS_PATH_LEN,
+                         "slcmpt:/title/%08x/%08x/content",
+                         CINS_ID_HI, CINS_ID_LO);
+                if (unlink(path) == 0 || errno == FS_STATUS_NOT_FOUND)
                     ret = 0;
             }
         }
@@ -136,24 +141,30 @@ CINS_Install (
         /* This directory is necessary for the Wii Menu to function
          * correctly, but also don't overwrite any data that might already
          * exist. */
-        if (IOSUHAX_FSA_MakeDir(fsaFd, "slc:/title/00010001/4f484243/data", -1) != 0 && errno != FS_STATUS_EXISTS) {
+        strncpy(pathd, titlePath, CINS_PATH_LEN);
+        strncat(pathd, "/data", CINS_PATH_LEN - 1);
+        if (mkdir(pathd, -1) != 0 && errno != FS_STATUS_EXISTS) {
             CINS_Log("Failed to create the data directory, ret = %d\n", ret);
             goto error;
         }
-        CINS_TRY (IOSUHAX_FSA_MakeDir(fsaFd, "slc:/title/00010001/4f484243/content", -1) == 0);
+
+        strncpy(pathd, titlePath, CINS_PATH_LEN);
+        strncat(pathd, "/content", CINS_PATH_LEN - 1);
+        CINS_TRY (mkdir(pathd, -1) == 0);
     }
 
     CINS_Log("Writing TMD...\n");
     stage = CINS_STAGE_TMD;
     {
-        //CINS_TRY (fd = fopen(path, "wb"));
-        CINS_TRY(fd = IOSUHAX_FSA_OpenFile(fsaFd, "slc:/title/00010001/4f484243/content/title.tmd", "wb", &fd));
-        //CINS_TRY (fwrite(tmd, tmd_size, 1, fd) == 1);
-        CINS_TRY(IOSUHAX_FSA_WriteFile(fsaFd, tmd, tmd_size, 1, fd, 0) == 1);
+        /* pathd should be the content directory */
+        strncpy(path, pathd, CINS_PATH_LEN);
+        strncat(path, "/title.tmd", CINS_PATH_LEN - 1);
 
-        //fclose(fd);
-        IOSUHAX_FSA_CloseFile(fsaFd, fd);
-        fd = 0;
+        CINS_TRY (fd = fopen(path, "wb"));
+        CINS_TRY (fwrite(tmd, tmd_size, 1, fd) == 1);
+
+        fclose(fd);
+        fd = NULL;
     }
 
     CINS_Log("Writing contents...\n");
@@ -163,32 +174,29 @@ CINS_Install (
         {
             //CINS_Log("Writing content %08x.app\n", i);
             snprintf(path, CINS_PATH_LEN,
-                     "slc:/title/00010001/4f484243/content/%08x.app", i);
+                     "slcmpt:/title/%08x/%08x/content/%08x.app",
+                     CINS_ID_HI, CINS_ID_LO, i);
 
-            //CINS_TRY (fd = fopen(path, "wb"));
-            CINS_TRY(fd = IOSUHAX_FSA_OpenFile(fsaFd, path, "wb", &fd));
-            //CINS_TRY (fwrite(contents[i].data, contents[i].length, 1, fd) == 1);
-            CINS_TRY(IOSUHAX_FSA_WriteFile(fsaFd, contents[i].data, contents[i].length, 1, fd, 0) == 1);
+            CINS_TRY (fd = fopen(path, "wb"));
+            CINS_TRY (fwrite(contents[i].data, contents[i].length, 1, fd) == 1);
 
-            //fclose(fd);
-            IOSUHAX_FSA_CloseFile(fsaFd, fd);
-            fd = 0;
+            fclose(fd);
+            fd = NULL;
         }
     }
     ret = IOS_SUCCESS;
     CINS_Log("Install succeeded!\n");
 
 error:
-    if (fd != 0)
-        //fclose(fd);
-        IOSUHAX_FSA_CloseFile(fsaFd, fd);
+    if (fd != NULL)
+        fclose(fd);
     if (ret < 0)
     {
         CINS_Log("Install failed, attempting to delete title...\n");
         /* Installation failed in the final stages. Delete these to be sure
          * there is no 'half installed' title lurking in the filesystem. */
-        //unlink(titlePath);
-        //unlink(ticketPath);
+        unlink(titlePath);
+        unlink(ticketPath);
     }
 
     if (ret < -0x99999)

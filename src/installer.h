@@ -46,7 +46,7 @@ extern s32 CINS_logLine;
 s32 CINS_Install(
     const void* ticket, u32 ticket_size,
     const void* tmd, u32 tmd_size,
-    CINS_Content* contents, u16 numContents, int fsaFd
+    CINS_Content* contents, u16 numContents
 );
 
 #ifdef __cplusplus

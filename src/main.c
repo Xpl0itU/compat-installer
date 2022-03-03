@@ -140,7 +140,7 @@ int main() {
             fsaFd = IOSUHAX_FSA_Open();
             //ret = IOSUHAX_FSA_Mount(fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01", 2, (char*)0, 0);
             //ret = mount_fs("fs", fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01");
-            ret = mount_fs("slc", fsaFd, NULL, "/vol/storage_slccmpt01");
+            ret = mount_fs("slcmpt", fsaFd, "/dev/slccmpt01", "/vol/storage_slccmpt01");
             resetScreen(tvBuffer, drcBuffer, tvBufferSize, drcBufferSize);
             clearScreen();
             writeToScreen(1, "Installing the Homebrew Channel...");
@@ -152,7 +152,7 @@ int main() {
             contents[1].length = title_00000001_bin_size;
             ret = CINS_Install((const void*) title_cetk_bin, title_cetk_bin_size,
                             (const void*) title_tmd_bin, title_tmd_bin_size,
-                            contents, 2, fsaFd);
+                            contents, 2);
             installed = true;
             resetScreen(tvBuffer, drcBuffer, tvBufferSize, drcBufferSize);
             clearScreen();
@@ -166,7 +166,7 @@ int main() {
     if(drcBuffer) free(drcBuffer);
     if(tvBuffer) free(tvBuffer);
     
-    unmount_fs("slc");
+    unmount_fs("slcmpt");
     OSScreenShutdown();
     WHBProcShutdown();
 }
